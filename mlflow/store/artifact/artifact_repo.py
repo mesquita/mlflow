@@ -196,6 +196,31 @@ class ArtifactRepository:
             max_workers=self.max_workers, thread_name_prefix=f"Mlflow{self.__class__.__name__}"
         )
 
+    def close(self, wait: bool = True) -> None:
+        """
+        Release the resources this repository owns.
+
+        A repository owns a thread pool, and subclasses may own further pools and HTTP
+        clients. None of them are released when the repository becomes unreachable: a
+        ``ThreadPoolExecutor``'s workers block on its work queue until ``shutdown()``
+        queues the sentinel that releases them, so dropping the last reference to a
+        repository leaves its threads running for the life of the process, each holding
+        its connection to the server open. A long-lived process that builds a repository
+        per download accumulates threads and file descriptors until it can open neither.
+
+        The repository should not be used after it is closed.
+
+        Args:
+            wait: Whether to wait for work already submitted to the pools to finish.
+        """
+        self.thread_pool.shutdown(wait=wait)
+
+    def __enter__(self) -> "ArtifactRepository":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
     def flush_async_logging(self):
         """
         Flushes the async logging queue, ensuring that all pending logging operations have

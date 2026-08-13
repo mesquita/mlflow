@@ -103,6 +103,10 @@ class CloudArtifactRepository(ArtifactRepository):
         # for more details
         self.chunk_thread_pool = self._create_thread_pool()
 
+    def close(self, wait: bool = True) -> None:
+        self.chunk_thread_pool.shutdown(wait=wait)
+        super().close(wait=wait)
+
     # Write APIs
 
     def log_artifacts(self, local_dir, artifact_path=None):

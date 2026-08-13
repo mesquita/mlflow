@@ -403,3 +403,34 @@ def test_download_artifacts_prevents_empty_dir_path_traversal(malicious_dir):
             ):
                 repo.download_artifacts("", dst_path=tmp.path())
         list_artifacts_mock.assert_called()
+
+
+def test_close_shuts_down_the_thread_pool():
+    repo = ArtifactRepositoryImpl("")
+    repo.thread_pool.submit(lambda: None).result()
+
+    repo.close()
+
+    assert repo.thread_pool._shutdown
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        repo.thread_pool.submit(lambda: None)
+
+
+def test_close_leaves_no_worker_thread_running():
+    repo = ArtifactRepositoryImpl("")
+    repo.thread_pool.submit(lambda: None).result()
+    threads = list(repo.thread_pool._threads)
+    assert threads
+
+    repo.close()
+
+    for thread in threads:
+        thread.join(timeout=10)
+        assert not thread.is_alive()
+
+
+def test_context_manager_closes_the_repository():
+    with ArtifactRepositoryImpl("") as repo:
+        repo.thread_pool.submit(lambda: None).result()
+
+    assert repo.thread_pool._shutdown

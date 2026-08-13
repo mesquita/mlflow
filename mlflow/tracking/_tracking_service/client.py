@@ -653,7 +653,13 @@ class TrackingServiceClient:
             # Cache the artifact repo to avoid a future network call, removing the oldest
             # entry in the cache if there are too many elements
             if len(utils._artifact_repos_cache) > 1024:
-                utils._artifact_repos_cache.popitem(last=False)
+                _, evicted_repo = utils._artifact_repos_cache.popitem(last=False)
+                # Evicting only drops the reference, which does not stop the threads the
+                # repository started nor close the connections they hold.
+                try:
+                    evicted_repo.close(wait=False)
+                except Exception:
+                    _logger.debug("Failed to close an evicted artifact repository", exc_info=True)
             utils._artifact_repos_cache[resource_id] = artifact_repo
             return artifact_repo
 

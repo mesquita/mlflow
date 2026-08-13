@@ -44,6 +44,12 @@ class DatabricksTrackingArtifactRepository(ArtifactRepository, ABC):
         self.databricks_sdk_repo = DatabricksSdkArtifactRepository(root_path)
         self.databricks_artifact_repo = DatabricksArtifactRepository(artifact_uri)
 
+    def close(self, wait: bool = True) -> None:
+        # This repository builds two more, so closing it has to release those as well.
+        self.databricks_sdk_repo.close(wait=wait)
+        self.databricks_artifact_repo.close(wait=wait)
+        super().close(wait=wait)
+
     @abstractmethod
     def _get_uri_regex(self) -> re.Pattern[str]:
         """Return the regex pattern for matching URIs of this type."""

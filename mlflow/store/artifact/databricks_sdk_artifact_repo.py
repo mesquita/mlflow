@@ -60,6 +60,16 @@ class DatabricksSdkArtifactRepository(ArtifactRepository):
                 _logger.debug("Failed to set multipart_upload_chunk_size in Config", exc_info=True)
         self.wc = wc
 
+    def close(self, wait: bool = True) -> None:
+        # The workspace client owns a `requests.Session`, and with it a connection pool
+        # that outlives this repository unless it is closed. The SDK exposes no `close`,
+        # so reach the session defensively and ignore a layout it does not have.
+        try:
+            self.wc.api_client._api_client._session.close()
+        except AttributeError:
+            _logger.debug("Failed to close the workspace client session", exc_info=True)
+        super().close(wait=wait)
+
     @property
     def files_api(self) -> "FilesAPI":
         return self.wc.files
