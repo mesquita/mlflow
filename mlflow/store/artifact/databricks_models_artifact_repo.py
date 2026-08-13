@@ -78,6 +78,10 @@ class DatabricksModelsArtifactRepository(ArtifactRepository):
         # for more details
         self.chunk_thread_pool = self._create_thread_pool()
 
+    def close(self, wait: bool = True) -> None:
+        self.chunk_thread_pool.shutdown(wait=wait)
+        super().close(wait=wait)
+
     def _call_endpoint(self, json, endpoint):
         db_creds = get_databricks_host_creds(self.databricks_profile_uri)
         return http_request(host_creds=db_creds, endpoint=endpoint, method="GET", params=json)

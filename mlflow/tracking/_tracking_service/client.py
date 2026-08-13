@@ -633,8 +633,10 @@ class TrackingServiceClient:
         *,
         resource: Literal["run", "logged_model"] = "run",
     ) -> ArtifactRepository:
-        # Attempt to fetch the artifact repo from a local cache
+        # Attempt to fetch the artifact repo from a local cache, refreshing the entry's
+        # recency so that eviction below removes the least recently used repository
         if cached_repo := utils._artifact_repos_cache.get(resource_id):
+            utils._artifact_repos_cache.move_to_end(resource_id)
             return cached_repo
         else:
             if resource == "run":
@@ -655,7 +657,10 @@ class TrackingServiceClient:
             if len(utils._artifact_repos_cache) > 1024:
                 _, evicted_repo = utils._artifact_repos_cache.popitem(last=False)
                 # Evicting only drops the reference, which does not stop the threads the
-                # repository started nor close the connections they hold.
+                # repository started nor close the connections they hold. Closing here can
+                # still race with a caller that obtained the repository before eviction;
+                # the LRU refresh on cache hits makes that unlikely, but only reference
+                # counting would rule it out.
                 try:
                     evicted_repo.close(wait=False)
                 except Exception:

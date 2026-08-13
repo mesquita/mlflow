@@ -445,3 +445,12 @@ def test_empty_headers_with_presigned_url(databricks_model_artifact_repo):
         new_headers = databricks_model_artifact_repo._extract_headers_from_signed_url(headers)
 
         assert new_headers == {}
+
+
+def test_close_shuts_down_the_chunk_thread_pool(databricks_model_artifact_repo):
+    databricks_model_artifact_repo.close()
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        databricks_model_artifact_repo.chunk_thread_pool.submit(lambda: None)
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        databricks_model_artifact_repo.thread_pool.submit(lambda: None)

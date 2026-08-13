@@ -208,6 +208,10 @@ class ArtifactRepository:
         its connection to the server open. A long-lived process that builds a repository
         per download accumulates threads and file descriptors until it can open neither.
 
+        The asynchronous artifact logging queue is not covered: once activated it owns
+        a thread and two pools of its own, and those are released by the ``atexit``
+        callback the activation registers, not by this method.
+
         The repository should not be used after it is closed.
 
         Args:

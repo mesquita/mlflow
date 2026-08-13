@@ -132,3 +132,14 @@ def test__parallelized_download_from_cloud(
                     download_path=str(fake_local_path),
                     http_uri="fake_signed_uri",
                 )
+
+
+def test_close_shuts_down_the_chunk_thread_pool():
+    repo = CloudArtifactRepository("s3://bucket/path")
+
+    repo.close()
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        repo.chunk_thread_pool.submit(lambda: None)
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        repo.thread_pool.submit(lambda: None)

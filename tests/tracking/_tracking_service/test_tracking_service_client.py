@@ -1,9 +1,12 @@
+from collections import OrderedDict
+from contextlib import contextmanager
 from unittest import mock
 
 import pytest
 
 from mlflow.entities import Metric, Param, Run, RunInfo, RunTag
 from mlflow.exceptions import MlflowException
+from mlflow.tracking._tracking_service import utils
 from mlflow.tracking._tracking_service.client import TrackingServiceClient
 
 
@@ -78,6 +81,57 @@ def test_artifact_repo_is_cached_per_run_id(db_uri):
         artifact_repo = TrackingServiceClient(db_uri)._get_artifact_repo("some_run_id")
         another_artifact_repo = TrackingServiceClient(db_uri)._get_artifact_repo("some_run_id")
         assert artifact_repo is another_artifact_repo
+
+
+@contextmanager
+def _full_artifact_repos_cache(monkeypatch):
+    # Fill the cache one entry beyond the eviction threshold in _get_artifact_repo so
+    # that the next miss evicts the least recently used entry
+    cache = OrderedDict((f"run_{i}", mock.MagicMock()) for i in range(1025))
+    monkeypatch.setattr(utils, "_artifact_repos_cache", cache)
+    with (
+        mock.patch(
+            "mlflow.tracking._tracking_service.client.TrackingServiceClient.get_run",
+            return_value=Run(
+                RunInfo(
+                    "uuid",
+                    "expr_id",
+                    "userid",
+                    "status",
+                    0,
+                    10,
+                    "active",
+                    artifact_uri="ftp://user:pass@host/path",
+                ),
+                None,
+            ),
+        ),
+        mock.patch(
+            "mlflow.tracking._tracking_service.client.get_artifact_repository",
+            return_value=mock.MagicMock(),
+        ),
+    ):
+        yield cache
+
+
+def test_get_artifact_repo_closes_the_evicted_repository(monkeypatch):
+    with _full_artifact_repos_cache(monkeypatch) as cache:
+        oldest_repo = cache["run_0"]
+        TrackingServiceClient("databricks://scope:key")._get_artifact_repo("new_run")
+
+    oldest_repo.close.assert_called_once_with(wait=False)
+    assert "run_0" not in cache
+    assert "new_run" in cache
+
+
+def test_get_artifact_repo_cache_hit_refreshes_recency(monkeypatch):
+    with _full_artifact_repos_cache(monkeypatch) as cache:
+        client = TrackingServiceClient("databricks://scope:key")
+        assert client._get_artifact_repo("run_0") is cache["run_0"]
+        client._get_artifact_repo("new_run")
+
+    cache["run_0"].close.assert_not_called()
+    assert "run_1" not in cache
 
 
 @pytest.fixture

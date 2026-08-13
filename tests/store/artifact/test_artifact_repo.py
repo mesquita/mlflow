@@ -411,7 +411,6 @@ def test_close_shuts_down_the_thread_pool():
 
     repo.close()
 
-    assert repo.thread_pool._shutdown
     with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
         repo.thread_pool.submit(lambda: None)
 
@@ -433,4 +432,5 @@ def test_context_manager_closes_the_repository():
     with ArtifactRepositoryImpl("") as repo:
         repo.thread_pool.submit(lambda: None).result()
 
-    assert repo.thread_pool._shutdown
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        repo.thread_pool.submit(lambda: None)

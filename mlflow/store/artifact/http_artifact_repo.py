@@ -55,7 +55,7 @@ class HttpArtifactRepository(ArtifactRepository, MultipartUploadMixin):
         super().__init__(artifact_uri, tracking_uri, registry_uri)
         # Lazy-initialized when _multipart_download is first used. Isolated from the
         # inherited thread_pool to avoid deadlocks when a file-download task waits on
-        # chunk-download tasks. Not explicitly shut down (consistent with thread_pool).
+        # chunk-download tasks.
         self._chunk_thread_pool = None
 
     @property
@@ -63,6 +63,11 @@ class HttpArtifactRepository(ArtifactRepository, MultipartUploadMixin):
         if self._chunk_thread_pool is None:
             self._chunk_thread_pool = self._create_thread_pool()
         return self._chunk_thread_pool
+
+    def close(self, wait: bool = True) -> None:
+        if self._chunk_thread_pool is not None:
+            self._chunk_thread_pool.shutdown(wait=wait)
+        super().close(wait=wait)
 
     @property
     def _host_creds(self):

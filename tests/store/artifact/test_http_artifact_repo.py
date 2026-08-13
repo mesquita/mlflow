@@ -799,3 +799,20 @@ def test_get_presigned_download_url(http_artifact_repo):
             f"/mlflow-artifacts/presigned/{remote_file_path}",
             "GET",
         )
+
+
+def test_close_shuts_down_the_chunk_thread_pool(http_artifact_repo):
+    http_artifact_repo.chunk_thread_pool.submit(lambda: None).result()
+
+    http_artifact_repo.close()
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        http_artifact_repo.chunk_thread_pool.submit(lambda: None)
+
+
+def test_close_does_not_initialize_the_chunk_thread_pool(http_artifact_repo):
+    http_artifact_repo.close()
+
+    assert http_artifact_repo._chunk_thread_pool is None
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        http_artifact_repo.thread_pool.submit(lambda: None)

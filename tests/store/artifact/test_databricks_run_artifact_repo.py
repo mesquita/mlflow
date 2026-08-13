@@ -276,3 +276,22 @@ def test_expected_uri_format():
         assert repo._get_expected_uri_format() == (
             "databricks/mlflow-tracking/<EXPERIMENT_ID>/<RUN_ID>"
         )
+
+
+def test_close_propagates_to_sub_repositories():
+    with (
+        mock.patch(
+            "mlflow.store.artifact.databricks_tracking_artifact_repo."
+            "DatabricksSdkArtifactRepository"
+        ) as sdk_repo_cls,
+        mock.patch(
+            "mlflow.store.artifact.databricks_tracking_artifact_repo.DatabricksArtifactRepository"
+        ) as databricks_repo_cls,
+    ):
+        repo = DatabricksRunArtifactRepository("dbfs:/databricks/mlflow-tracking/1/123")
+        repo.close(wait=False)
+
+    sdk_repo_cls.return_value.close.assert_called_once_with(wait=False)
+    databricks_repo_cls.return_value.close.assert_called_once_with(wait=False)
+    with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
+        repo.thread_pool.submit(lambda: None)
