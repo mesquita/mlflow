@@ -186,6 +186,9 @@ def write_toml_file_if_changed(
 class PackageRequirement(BaseModel):
     pip_release: str = Field(..., description="The pip package name")
     max_major_version: int = Field(..., description="Maximum major version allowed")
+    maximum: str | None = Field(
+        None, description="Exclusive upper bound that overrides max_major_version"
+    )
     minimum: str | None = Field(None, description="Minimum version required")
     unsupported: list[str] | None = Field(None, description="List of unsupported versions")
     markers: str | None = Field(
@@ -207,8 +210,10 @@ def generate_requirements_from_yaml(requirements_yaml: RequirementsYaml) -> list
 
         extras = f"[{','.join(package_entry.extras)}]" if package_entry.extras else ""
 
-        max_major_version = package_entry.max_major_version
-        version_specs.append(f"<{max_major_version + 1}")
+        if package_entry.maximum:
+            version_specs.append(f"<{package_entry.maximum}")
+        else:
+            version_specs.append(f"<{package_entry.max_major_version + 1}")
 
         if package_entry.minimum:
             version_specs.append(f">={package_entry.minimum}")

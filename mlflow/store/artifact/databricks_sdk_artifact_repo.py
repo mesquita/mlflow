@@ -13,6 +13,7 @@ from mlflow.store.artifact.artifact_repo import ArtifactRepository
 from mlflow.utils import get_installed_version
 
 if TYPE_CHECKING:
+    import requests
     from databricks.sdk.service.files import FilesAPI
 
 
@@ -26,6 +27,45 @@ def _sdk_supports_large_file_uploads() -> bool:
 
 
 _logger = logging.getLogger(__name__)
+
+_workspace_client_close_path_verified = False
+
+
+def _workspace_client_session(wc) -> "requests.Session | None":
+    """
+    Return the ``requests.Session`` the workspace client owns, or None if the private
+    attribute chain this relies on is gone. The chain was validated against
+    databricks-sdk 0.125.0.
+    """
+    try:
+        return wc.api_client._api_client._session
+    except AttributeError:
+        return None
+
+
+def _verify_workspace_client_close_path(wc) -> None:
+    """
+    Log an error, once per process, if the workspace client can not be released.
+
+    ``close()`` prefers a public ``close()`` on the client and falls back to closing
+    the session reached through a private attribute chain. If a future databricks-sdk
+    removes the chain without adding a public ``close()``, the fallback silently turns
+    into a no-op, so surface that loudly at construction time instead.
+    """
+    global _workspace_client_close_path_verified
+    if _workspace_client_close_path_verified:
+        return
+    _workspace_client_close_path_verified = True
+    if not callable(getattr(wc, "close", None)) and _workspace_client_session(wc) is None:
+        _logger.error(
+            "The installed databricks-sdk exposes neither a public `close()` nor the "
+            "`api_client._api_client._session` attribute chain (validated against "
+            "databricks-sdk 0.125.0). Closing a %s will not release the workspace "
+            "client's connections, which leaks file descriptors in long-lived "
+            "processes. Install a databricks-sdk version matching the constraint "
+            "declared by mlflow.",
+            DatabricksSdkArtifactRepository.__name__,
+        )
 
 
 # TODO: The following artifact repositories should use this class. Migrate them.
@@ -59,15 +99,22 @@ class DatabricksSdkArtifactRepository(ArtifactRepository):
             except AttributeError:
                 _logger.debug("Failed to set multipart_upload_chunk_size in Config", exc_info=True)
         self.wc = wc
+        _verify_workspace_client_close_path(wc)
 
     def close(self, wait: bool = True) -> None:
         # The workspace client owns a `requests.Session`, and with it a connection pool
-        # that outlives this repository unless it is closed. The SDK exposes no `close`,
-        # so reach the session defensively and ignore a layout it does not have.
-        try:
-            self.wc.api_client._api_client._session.close()
-        except AttributeError:
-            _logger.debug("Failed to close the workspace client session", exc_info=True)
+        # that outlives this repository unless it is closed. Prefer a public `close()`
+        # so an SDK that grows one retires the private fallback automatically; the
+        # fallback's absence is reported by the constructor.
+        if callable(wc_close := getattr(self.wc, "close", None)):
+            wc_close()
+        elif (session := _workspace_client_session(self.wc)) is not None:
+            session.close()
+        # With `enable_experimental_files_api_client=True`, `wc.files` is a `FilesExt`
+        # that lazily caches two more sessions, separate from the one closed above.
+        for attr in ("_cached_storage_proxy_session", "_cached_cloud_provider_session"):
+            if (session := getattr(self.wc.files, attr, None)) is not None:
+                session.close()
         super().close(wait=wait)
 
     @property

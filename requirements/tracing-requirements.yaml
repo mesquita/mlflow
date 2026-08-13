@@ -39,6 +39,10 @@ databricks-sdk:
   pip_release: databricks-sdk
   minimum: "0.20.0"
   max_major_version: 0
+  # DatabricksSdkArtifactRepository.close() releases the workspace client's connections
+  # through a private attribute chain validated against databricks-sdk 0.125.0. Raise
+  # the cap only after re-validating that chain (or a public close()) on the new version.
+  maximum: "0.126"
 
 pydantic:
   pip_release: pydantic

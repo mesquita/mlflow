@@ -4361,7 +4361,7 @@ requires-dist = [
     { name = "cloudpickle", specifier = "<4" },
     { name = "cryptography", specifier = ">=43.0.0,<51" },
     { name = "databricks-agents", marker = "extra == 'databricks'", specifier = ">=1.2.0,<2.0" },
-    { name = "databricks-sdk", specifier = ">=0.20.0,<1" },
+    { name = "databricks-sdk", specifier = ">=0.20.0,<0.126" },
     { name = "docker", specifier = ">=4.0.0,<8" },
     { name = "fastapi", specifier = "<1" },
     { name = "fastapi", marker = "extra == 'gateway'", specifier = "<1" },

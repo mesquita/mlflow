@@ -32,7 +32,7 @@ dependencies = [
   "cachetools<8,>=5.0.0",
   "click<9,>=7.0",
   "cloudpickle<4",
-  "databricks-sdk<1,>=0.20.0",
+  "databricks-sdk<0.126,>=0.20.0",
   "fastapi<1",
   "gitpython<4,>=3.1.9",
   "importlib_metadata<10,>=3.7.0,!=4.7.0",
